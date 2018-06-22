@@ -78,9 +78,9 @@
 			children = (
 				0074EAAB20DBB6A9002C6396 /* QRImageColor.h */,
 				0074EAAC20DBB6A9002C6396 /* QRImageColor.m */,
+				0074EAAA20DBB6A8002C6396 /* CCPQRBarCode-Bridging-Header.h */,
 				0074EAA020DBAE88002C6396 /* QRCodeGenerator.swift */,
 				0074EAA220DBAE88002C6396 /* QRScan.swift */,
-				0074EAAA20DBB6A8002C6396 /* CCPQRBarCode-Bridging-Header.h */,
 			);
 			path = Sources;
 			sourceTree = "<group>";

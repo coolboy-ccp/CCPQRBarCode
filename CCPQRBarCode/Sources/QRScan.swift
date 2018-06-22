@@ -11,7 +11,6 @@ import AVFoundation
 
 class QRScan: NSObject, AVCaptureMetadataOutputObjectsDelegate {
     private let session = AVCaptureSession()
-    private let device = AVCaptureDevice.default(for: .video)
     private var drawRect = CGRect.zero
     private let supview: UIView
     private let width: CGFloat
@@ -19,7 +18,7 @@ class QRScan: NSObject, AVCaptureMetadataOutputObjectsDelegate {
     private let descriptionLabel = UILabel()
     private let frame: CGRect
     private let scannerView = UIImageView()
-    private let lineView = UIImageView(image: UIImage(named: "line"))
+    private let lineView = UIImageView(image: UIImage(named: "sweep_bg_line"))
     private let cornerViews
         = ["leftTop", "rightTop", "leftDown", "rightDown"]
             .map { UIImage(named: $0) }
@@ -32,20 +31,20 @@ class QRScan: NSObject, AVCaptureMetadataOutputObjectsDelegate {
             }
         }
     }
-   
-    var getCode: (String) -> ()?
+    var getCode: (String) -> () = { _ in }
+    
     enum SannerType {
         case qr, bar
     }
+    
     private struct Defaults {
-        private static let barCode: [AVMetadataObject.ObjectType]
+        static let barCode: [AVMetadataObject.ObjectType]
             = [.upce, .code39, .code39Mod43, .code93, .code128, .ean8, .ean13, .itf14, .interleaved2of5]
-        private static let qrCode: [AVMetadataObject.ObjectType]
+        static let qrCode: [AVMetadataObject.ObjectType]
             = [.qr, .aztec]
-        private static let qrBarCode: [AVMetadataObject.ObjectType]
+        static let qrBarCode: [AVMetadataObject.ObjectType]
             = [.pdf417]
         
-        static let outputTypes = Defaults.barCode + Defaults.qrBarCode + Defaults.qrBarCode
         static let videoGravity: AVLayerVideoGravity = .resizeAspectFill
         static let scanFrameScale: CGFloat = 3.0 / 5.0
         static let descriptionFont = UIFont.systemFont(ofSize: 12)
@@ -53,6 +52,7 @@ class QRScan: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         static let movingDuration: TimeInterval = 2.0
     }
     
+    @discardableResult
     init(supview: UIView, type: SannerType = .qr, frame: CGRect = UIScreen.main.bounds) {
         self.supview = supview
         self.type = type
@@ -62,31 +62,34 @@ class QRScan: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         super.init()
         scanView()
         isInit = true
+        scannerView.frame = frame
     }
     
     private func scannerCreator() {
-        guard let device = device else {
-            fatalError("device[AVCaptureDevice] can't be nil")
+        if let device = AVCaptureDevice.default(for: .video) {
+            do {
+                let input = try AVCaptureDeviceInput(device: device)
+                let output = AVCaptureMetadataOutput()
+                if session.canAddInput(input) {
+                    session.addInput(input)
+                }
+                if session.canAddOutput(output) {
+                    session.addOutput(output)
+                }
+                output.setMetadataObjectsDelegate(self, queue: .main)
+                output.metadataObjectTypes = Defaults.qrBarCode + Defaults.qrCode + Defaults.barCode
+                session.sessionPreset = .high
+                let preLayer = AVCaptureVideoPreviewLayer(session: session)
+                preLayer.videoGravity = Defaults.videoGravity
+                preLayer.frame = frame
+                supview.layer.insertSublayer(preLayer, at: 0)
+                start()
+            } catch let error {
+                print("input[AVCaptureDeviceInput] error: \(error.localizedDescription)")
+            }
         }
-        guard let input = try? AVCaptureDeviceInput(device: device) else {
-            fatalError("input[AVCaptureDeviceInput] can't be nil")
-        }
-        let output = AVCaptureMetadataOutput()
-        if session.canAddInput(input) {
-            session.addInput(input)
-        }
-        if session.canAddOutput(output) {
-            session.addOutput(output)
-        }
-        output.setMetadataObjectsDelegate(self, queue: .main)
-        output.metadataObjectTypes = Defaults.outputTypes
-        session.sessionPreset = .high
-        let preLayer = AVCaptureVideoPreviewLayer(session: session)
-        preLayer.videoGravity = Defaults.videoGravity
-        preLayer.frame = frame
-        supview.layer.insertSublayer(preLayer, at: 0)
     }
-    
+   
     private func qrFrame() -> CGRect {
         let size = min(width, height) * Defaults.scanFrameScale
         let rect = CGRect(x: 0, y: 0, width: size, height: size)
@@ -116,7 +119,7 @@ class QRScan: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         guard let ctx = context else {
             fatalError("failed to init ctx[CGContextRef]")
         }
-        ctx.setFillColor(red: 0, green: 0, blue: 0, alpha: 0.3)
+        ctx.setFillColor(red: 0, green: 0, blue: 0, alpha: 0.4)
         ctx.fill(frame)
         ctx.clear(drawRect)
         let image = UIGraphicsGetImageFromCurrentImageContext()
@@ -133,6 +136,16 @@ class QRScan: NSObject, AVCaptureMetadataOutputObjectsDelegate {
             supview.addSubview(cornerView)
         }
         reload()
+    }
+    
+    func start() {
+        session.startRunning()
+    }
+    
+    func stop() {
+        session.stopRunning()
+        reload()
+        lineView.layer.removeAllAnimations()
     }
     
     func reload() {
@@ -154,21 +167,29 @@ class QRScan: NSObject, AVCaptureMetadataOutputObjectsDelegate {
             let idxY = idx / 2
             cornerView.frame = CGRect(x: drawRect.minX + (drawRect.width - 15) * CGFloat(idxX), y: drawRect.minY + (drawRect.height - 15) * CGFloat(idxY), width: 15, height: 15)
         }
-        lineView.frame = CGRect(x: drawRect.minX, y: drawRect.minY, width: drawRect.width, height: 5)
+        lineView.frame = CGRect(x: drawRect.minX, y: drawRect.minY, width: drawRect.width, height: 0)
         movingLine()
+        session.startRunning()
     }
     
     private func movingLine() {
         lineView.layer.removeAllAnimations()
-        UIView.animate(withDuration: Defaults.movingDuration, delay: 0, options: [.repeat, .curveEaseIn], animations: { [unowned self] in
-            self.lineView.frame = self.lineView.frame.offsetBy(dx: 0, dy: self.drawRect.height)
+        UIView.animate(withDuration: Defaults.movingDuration, delay: 0, options: [.repeat, .curveLinear], animations: { [unowned self] in
+            var frame = self.lineView.frame
+            frame.size.height = self.drawRect.height
+            self.lineView.frame = frame
         }, completion: nil)
-    }
-    
+    }    
+}
+
+extension QRScan: AVCaptureDepthDataOutputDelegate {
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
         if metadataObjects.count > 0 {
-            let metadataObject = metadataObjects.first
-            metadataObject.stringValue
+            stop()
+            let metadataObject = metadataObjects.first as! AVMetadataMachineReadableCodeObject
+            if let code = metadataObject.stringValue {
+                getCode(code)
+            }
         }
     }
 }
