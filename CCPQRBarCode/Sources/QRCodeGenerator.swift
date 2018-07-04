@@ -38,9 +38,6 @@ class QRCodeGenerator {
         static let color = UIColor.black
         static let info = "QRCodeGenerator.CCP"
         static let level = InputCorrectionLevel.M.rawValue
-        static let block: @convention(c)(UnsafeMutableRawPointer?, UnsafeRawPointer, Int) -> () = { _,_,_ in
-            
-        }
     }
     
     init(size: CGSize = Defaults.size, color: UIColor = Defaults.color, info: String = Defaults.info, type: CodeType = .qr) {

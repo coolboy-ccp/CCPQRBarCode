@@ -174,7 +174,7 @@ class QRScan: NSObject, AVCaptureMetadataOutputObjectsDelegate {
     
     private func movingLine() {
         lineView.layer.removeAllAnimations()
-        UIView.animate(withDuration: Defaults.movingDuration, delay: 0, options: [.repeat, .curveLinear], animations: { [unowned self] in
+        UIView.animate(withDuration: Defaults.movingDuration, delay: 1.0, options: [.repeat, .curveLinear], animations: { [unowned self] in
             var frame = self.lineView.frame
             frame.size.height = self.drawRect.height
             self.lineView.frame = frame
@@ -191,5 +191,14 @@ extension QRScan: AVCaptureDepthDataOutputDelegate {
                 getCode(code)
             }
         }
+    }
+}
+
+extension UIViewController {
+    @discardableResult
+    func scanning(frame: CGRect? = nil, type: QRScan.SannerType = .qr) -> QRScan {
+        let rect = frame ?? self.view.frame
+        let scanner = QRScan(supview: self.view, type: type, frame: rect)
+        return scanner
     }
 }
